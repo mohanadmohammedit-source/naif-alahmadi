@@ -13,7 +13,6 @@ import {
   Send,
   Save,
   Moon,
-  AlertTriangle,
 } from "lucide-react";
 import Link from "next/link";
 import { formatAmount, formatDate, formatQuantity } from "@/lib/format";
@@ -417,10 +416,6 @@ export function UnifiedWorkerSheet({
   const totalItemsCount = rows.length;
   const purchasedItemsCount = rows.filter((r) => r.isPurchased && Number(r.totalQuantity) > 0).length;
   const progressPercent = totalItemsCount > 0 ? Math.round((purchasedItemsCount / totalItemsCount) * 100) : 0;
-  const arabicDayName = new Intl.DateTimeFormat("ar-YE", { weekday: "long" }).format(
-    new Date(date + "T12:00:00Z")
-  );
-
   // إجمالي تكلفة الشراء اللحظي
   const estimatedTotalPurchaseValue = rows.reduce((acc, r) => {
     const q = parseFloat(r.totalQuantity || "0");

@@ -1,7 +1,8 @@
 import { createServerClient, type CookieOptions } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
 
-const PUBLIC_PATHS = ["/login", "/auth", "/offline"];
+const PUBLIC_PATHS = ["/login", "/auth", "/offline", "/demo"];
+const UNCONFIGURED_PUBLIC_PATHS = ["/", "/demo", "/setup"];
 
 /**
  * تحديث الجلسة في كل طلب وتوجيه غير المصادقين إلى /login.
@@ -15,7 +16,9 @@ export async function updateSession(request: NextRequest) {
 
   if (!url || !anonKey) {
     // بيئة غير مهيأة: نسمح بفتح صفحة الإعداد فقط بدل تعطل الموقع بالكامل.
-    if (request.nextUrl.pathname.startsWith("/setup")) return response;
+    if (UNCONFIGURED_PUBLIC_PATHS.some((path) => request.nextUrl.pathname === path || request.nextUrl.pathname.startsWith(`${path}/`))) {
+      return response;
+    }
     return NextResponse.redirect(new URL("/setup", request.url));
   }
 

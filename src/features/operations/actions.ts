@@ -3,12 +3,91 @@
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { requireRole } from "@/lib/auth/session";
+import { createAdminSupabase } from "@/lib/supabase/admin";
 import { createServerSupabase } from "@/lib/supabase/server";
 import { callRpc } from "@/lib/rpc";
 
 const uuid = z.string().uuid();
 
 export type OperationResult = { ok: true; message: string } | { ok: false; message: string };
+
+export async function createManagedUserAction(input: unknown): Promise<OperationResult> {
+  const parsed = z
+    .object({
+      displayName: z.string().trim().min(1).max(120),
+      email: z.string().trim().email().max(255),
+      password: z.string().min(10).max(128),
+      role: z.enum(["admin", "worker", "store_owner"]),
+      storeIds: z.array(uuid).max(50),
+    })
+    .superRefine((value, context) => {
+      if (value.role === "store_owner" && value.storeIds.length === 0) {
+        context.addIssue({ code: "custom", message: "يجب ربط صاحب البقالة ببقالة واحدة على الأقل." });
+      }
+    })
+    .safeParse(input);
+
+  if (!parsed.success) return { ok: false, message: parsed.error.issues[0]?.message ?? "بيانات المستخدم غير صالحة." };
+
+  try {
+    const currentAdmin = await requireRole(["admin"]);
+    const adminClient = createAdminSupabase();
+    const { data: authData, error: authError } = await adminClient.auth.admin.createUser({
+      email: parsed.data.email.toLowerCase(),
+      password: parsed.data.password,
+      email_confirm: true,
+    });
+    if (authError || !authData.user) {
+      throw new Error(authError?.message ?? "تعذر إنشاء حساب الدخول.");
+    }
+
+    const userId = authData.user.id;
+    const { error: profileError } = await adminClient.from("profiles").insert({
+      user_id: userId,
+      display_name: parsed.data.displayName,
+      role: parsed.data.role,
+      active: true,
+    } as never);
+
+    if (profileError) {
+      await adminClient.auth.admin.deleteUser(userId);
+      throw new Error("تم إلغاء إنشاء الحساب لأن ملف المستخدم لم يُحفظ: " + profileError.message);
+    }
+
+    if (parsed.data.storeIds.length > 0) {
+      const memberships = parsed.data.storeIds.map((storeId) => ({
+        user_id: userId,
+        store_id: storeId,
+        active: true,
+        created_by: currentAdmin.userId,
+      }));
+      const { error: membershipError } = await adminClient.from("store_memberships").insert(memberships as never);
+      if (membershipError) {
+        await adminClient.from("profiles").delete().eq("user_id", userId);
+        await adminClient.auth.admin.deleteUser(userId);
+        throw new Error("تم إلغاء إنشاء الحساب لأن ربط البقالة لم يكتمل: " + membershipError.message);
+      }
+    }
+
+    await adminClient.from("audit_log").insert({
+      actor_id: currentAdmin.userId,
+      action: "user_created",
+      entity_type: "profile",
+      entity_id: userId,
+      after_data: {
+        display_name: parsed.data.displayName,
+        email: parsed.data.email.toLowerCase(),
+        role: parsed.data.role,
+        store_ids: parsed.data.storeIds,
+      },
+    } as never);
+
+    revalidatePath("/admin/users");
+    return { ok: true, message: "تم إنشاء الحساب وربطه بالصلاحيات المحددة." };
+  } catch (error) {
+    return { ok: false, message: error instanceof Error ? error.message : "تعذر إنشاء المستخدم." };
+  }
+}
 
 export async function saveNightOrderAction(input: unknown): Promise<OperationResult> {
   const parsed = z.object({

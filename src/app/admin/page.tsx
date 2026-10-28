@@ -1,5 +1,4 @@
 import Link from "next/link";
-import { Card, StatCard } from "@/components/ui/primitives";
 import { Alert } from "@/components/ui/status";
 import { businessDate, isIsoDate } from "@/features/accounting/domain/period";
 import { createServerSupabase } from "@/lib/supabase/server";

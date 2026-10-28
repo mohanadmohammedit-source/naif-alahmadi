@@ -4,6 +4,7 @@ const nextConfig: NextConfig = {
   reactStrictMode: true,
   poweredByHeader: false,
   typedRoutes: false,
+  allowedDevOrigins: ["192.168.88.1"],
   // بعض بيئات التطوير (Windows) تفتقد @next/swc الأصلي؛ استخدم `next build --webpack`
   // حسب التوثيق، بدل إجبار Turbopack. لا تبديل للمحرر في الإنتاج.
   async headers() {

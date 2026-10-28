@@ -3,11 +3,6 @@
 import { useState } from "react";
 import Link from "next/link";
 
-interface Product {
-  id: string;
-  name: string;
-}
-
 interface Supplier {
   id: string;
   name: string;
